@@ -1,0 +1,207 @@
+########################################
+# 1. Namespace
+########################################
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: insurance-platform
+---
+########################################
+# 2. Postgres Secret (password)
+########################################
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: insurance-platform
+type: Opaque
+data:
+  POSTGRES_PASSWORD: cG9zdGdyZXM=   # "postgres" base64 encoded
+---
+########################################
+# 3. Postgres ConfigMap
+########################################
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: insurance-platform
+data:
+  POSTGRES_DB: "claimsdb"
+  POSTGRES_USER: "postgres"
+---
+########################################
+# 4. Persistent Volume Claim for Postgres
+########################################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: insurance-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+########################################
+# 5. PostgreSQL Deployment (StatefulSet is ideal, but Deployment works too)
+########################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: insurance-platform
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+            - secretRef:
+                name: postgres-secret
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 2Gi
+---
+########################################
+# 6. Postgres Service
+########################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: insurance-platform
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+---
+########################################
+# 7. Claims Service ConfigMap
+########################################
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: claims-config
+  namespace: insurance-platform
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+---
+########################################
+# 8. Claims Service Secrets (Prisma/PostgreSQL URL)
+########################################
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claims-secrets
+  namespace: insurance-platform
+type: Opaque
+data:
+  DATABASE_URL: cG9zdGdyZXFsOi8vcG9zdGdyZXM6cG9zdGdyZXNAcG9zdGdyZXM6NTQzMi9jbGFpbXNkYj9zY2hlbWE9cHVibGlj
+  # "postgresql://postgres:postgres@postgres:5432/claimsdb?schema=public"
+---
+########################################
+# 9. Claims Service Deployment
+########################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claims-service
+  namespace: insurance-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: claims-service
+  template:
+    metadata:
+      labels:
+        app: claims-service
+    spec:
+      containers:
+        - name: claims-service
+          image: sujitnair51/claims-service:v3
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: claims-config
+            - secretRef:
+                name: claims-secrets
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 20
+            periodSeconds: 10
+---
+########################################
+# 10. Claims Service - ClusterIP
+########################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: claims-service
+  namespace: insurance-platform
+spec:
+  selector:
+    app: claims-service
+  ports:
+    - port: 8081
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP
+---
+########################################
+# 11. Optional Ingress (Minikube)
+########################################
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: claims-ingress
+  namespace: insurance-platform
+spec:
+  ingressClassName: nginx
+  rules:
+    # - host: claims.local
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: claims-service
+                port:
+                  number: 8081
