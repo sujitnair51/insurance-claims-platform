@@ -6,6 +6,7 @@ import { PrismaService } from './prisma/prisma.service';
 //this is mandatory to get the .env file read
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { LoggerModule } from 'nestjs-pino';
           : undefined,
     },
   }),
-  ClaimsModule
+  ClaimsModule,
+  HealthModule
 ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
