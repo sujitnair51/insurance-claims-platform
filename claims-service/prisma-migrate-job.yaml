@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate
+  namespace: insurance-platform
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: us-central1-docker.pkg.dev/sn-insurance-platform/claims-repo/claims-service:v3
+          envFrom:
+            - secretRef:
+                name: claims-secrets
+            - configMapRef:
+                name: claims-config
+          command: 
+              - sh
+              - -c
+              - |
+                npx prisma -v
+                cat node_modules/@prisma/cli/package.json
+                cat node_modules/@prisma/client/package.json
+                echo "--- START schema.prisma ---"
+                cat prisma/schema.prisma
+                echo "--- END schema.prisma ---"
+                echo "DATABASE_URL=$DATABASE_URL"
+                npx prisma migrate deploy
+          
+          workingDir: /usr/src/app
