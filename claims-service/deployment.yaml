@@ -74,6 +74,9 @@ spec:
                 name: postgres-config
             - secretRef:
                 name: postgres-secret
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
@@ -123,7 +126,7 @@ metadata:
   namespace: insurance-platform
 type: Opaque
 data:
-  DATABASE_URL: cG9zdGdyZXFsOi8vcG9zdGdyZXM6cG9zdGdyZXNAcG9zdGdyZXM6NTQzMi9jbGFpbXNkYj9zY2hlbWE9cHVibGlj
+  DATABASE_URL: cG9zdGdyZXNxbDovL3Bvc3RncmVzOnBvc3RncmVzQHBvc3RncmVzOjU0MzIvY2xhaW1zZGI/c2NoZW1hPXB1YmxpYw==
   # "postgresql://postgres:postgres@postgres:5432/claimsdb?schema=public"
 ---
 ########################################
@@ -146,7 +149,7 @@ spec:
     spec:
       containers:
         - name: claims-service
-          image: sujitnair51/claims-service:v3
+          image: us-central1-docker.pkg.dev/sn-insurance-platform/claims-repo/claims-service:v3
           ports:
             - containerPort: 3000
           envFrom:
@@ -182,7 +185,7 @@ spec:
     - port: 8081
       targetPort: 3000
       protocol: TCP
-  type: ClusterIP
+  type: LoadBalancer
 ---
 ########################################
 # 11. Optional Ingress (Minikube)
